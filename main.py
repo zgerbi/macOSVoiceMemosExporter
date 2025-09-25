@@ -29,15 +29,21 @@ def create_connection(db_file):
     return conn
 
 
-def get_all_memos(conn):
+def get_all_memos(conn, major_version):
     """
     Query wanted rows in the table ZCLOUDRECORDING
     :param conn: the Connection object
+    :param major_version: The major version of macOS
     :return: rows
     """
     try:
         cur = conn.cursor()
-        cur.execute("SELECT ZDATE, ZDURATION, ZCUSTOMLABELFORSORTING, ZPATH FROM ZCLOUDRECORDING ORDER BY ZDATE")
+        if major_version >= 14:
+            # Sonoma or later
+            cur.execute("SELECT ZDATE, ZDURATION, ZCUSTOMLABELFORSORTING, ZPATH FROM ZCLOUDRECORDING ORDER BY ZDATE")
+        else:
+            # Ventura or earlier
+            cur.execute("SELECT ZDATE, ZDURATION, ZCUSTOMLABEL, ZPATH FROM ZCLOUDRECORDING ORDER BY ZDATE")
     except Error as e:
         if "authorization denied" in str(e):
             print("No permission to read database file. This script requires Full Disk Access.")
@@ -133,7 +139,7 @@ def main():
     if not conn:
         exit()
     with conn:
-        rows = get_all_memos(conn)
+        rows = get_all_memos(conn, major_version)
     if not rows:
         exit()
 
