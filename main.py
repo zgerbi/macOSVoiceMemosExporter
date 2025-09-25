@@ -35,8 +35,13 @@ def get_all_memos(conn):
     :param conn: the Connection object
     :return: rows
     """
-    cur = conn.cursor()
-    cur.execute("SELECT ZDATE, ZDURATION, ZCUSTOMLABELFORSORTING, ZPATH FROM ZCLOUDRECORDING ORDER BY ZDATE")
+    try:
+        cur = conn.cursor()
+        cur.execute("SELECT ZDATE, ZDURATION, ZCUSTOMLABELFORSORTING, ZPATH FROM ZCLOUDRECORDING ORDER BY ZDATE")
+    except Error as e:
+        if "authorization denied" in str(e):
+            print("No permission to read database file. This script requires Full Disk Access.")
+            print("Go to System Settings -> Privacy & Security -> Full Disk Access and add your terminal.")
 
     return cur.fetchall()
 
