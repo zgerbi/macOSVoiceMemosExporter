@@ -2,6 +2,7 @@
 
 import argparse
 import os
+import platform
 import sqlite3
 from datetime import datetime, timedelta
 import time
@@ -35,15 +36,23 @@ def get_all_memos(conn):
     :return: rows
     """
     cur = conn.cursor()
-    cur.execute("SELECT ZDATE, ZDURATION, ZCUSTOMLABEL, ZPATH FROM ZCLOUDRECORDING ORDER BY ZDATE")
+    cur.execute("SELECT ZDATE, ZDURATION, ZCUSTOMLABELFORSORTING, ZPATH FROM ZCLOUDRECORDING ORDER BY ZDATE")
 
     return cur.fetchall()
 
 
 def main():
     # Define default paths
-    _db_path_default = os.path.join(os.path.expanduser("~"), "Library", "Application Support",
-                                    "com.apple.voicememos", "Recordings", "CloudRecordings.db")
+    mac_version = platform.mac_ver()[0]
+    major_version = int(mac_version.split('.')[0])
+
+    if major_version >= 14:
+        # Sonoma or later
+        _db_path_default = os.path.join(os.path.expanduser("~"), "Library", "Group Containers", "group.com.apple.VoiceMemos.shared", "Recordings", "CloudRecordings.db")
+    else:
+        # Ventura or earlier
+        _db_path_default = os.path.join(os.path.expanduser("~"), "Library", "Application Support", "com.apple.voicememos", "Recordings", "CloudRecordings.db")
+    
     _export_path_default = os.path.join(os.path.expanduser("~"), "Voice Memos Export")
 
     # Setting up arguments and --help
@@ -148,25 +157,36 @@ def main():
         duration_str = str(timedelta(seconds=row[1]))
         duration_str = duration_str[:duration_str.rfind(".") + 3] if "." in duration_str else duration_str + ".00"
         duration_str = "0" + duration_str if len(duration_str) == 10 else duration_str
-        label = row[2].encode('ascii', 'ignore').decode("ascii").replace("/", "_")
-        path_old = row[3] if row[3] else ""
-        if path_old:
-            path_new = label + path_old[path_old.rfind("."):]
-            path_new = date.strftime(args.date_in_name_format) + path_new if args.date_in_name else path_new
-            path_new = os.path.join(args.export_path, path_new)
+        label = row[2].encode('ascii', 'ignore').decode("ascii").replace("/", "_") if row[2] else None
+        path_old_db = row[3] if row[3] else ""
+        if path_old_db:
+            path_old = os.path.join(os.path.dirname(args.db_path), path_old_db)
+            
+            # Determine the new file name
+            file_extension = os.path.splitext(path_old_db)[1]
+            if label:
+                new_file_name = label + file_extension
+            else:
+                new_file_name = os.path.basename(path_old_db)
+
+            if args.date_in_name:
+                new_file_name = date.strftime(args.date_in_name_format) + new_file_name
+            
+            path_new = os.path.join(args.export_path, new_file_name)
         else:
+            path_old = ""
             path_new = ""
-        if len(path_old) < getWidth("Old Path") - 3:
-            path_old_short = path_old
+        if len(path_old_db) < getWidth("Old Path") - 3:
+            path_old_short = path_old_db
         else:
-            path_old_short = "..." + path_old[-getWidth("Old Path") + 3:]
+            path_old_short = "..." + path_old_db[-getWidth("Old Path") + 3:]
         if len(path_new) < getWidth("New Path") - 3:
             path_new_short = path_new
         else:
             path_new_short = "..." + path_new[-getWidth("New Path") + 3:]
 
         # print body row and wait for keys (if needed)
-        if not path_old:
+        if not path_old_db:
             print(body_row((date_str, duration_str, path_old_short, path_new_short, "No File")))
         else:
             if args.all:
